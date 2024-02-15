@@ -1,0 +1,282 @@
+---
+title: "Student Performance Analysis and Prediction"
+author: "Kumar Kalyan Budiredla and Prabhu Kurra"
+output:
+  slidy_presentation: default
+  ioslides_presentation: default
+  beamer_presentation: default
+---
+## R Setup
+
+```{r setup, message=FALSE}
+knitr::opts_chunk$set(echo = TRUE,message = FALSE)
+```
+## Problem_Statement
+
+Developing a predictive model for academic performance using linear regression
+
+## Dataset Information 
+
+This dataset is collected from the kaggle and it contains Information related to student performance and habits
+
+```{r}
+#importing the package
+suppressPackageStartupMessages(library(tidyverse))
+student_performance_data <- read_csv("Student_Performance.csv",show_col_types = FALSE)
+```
+
+## Data Understanding and EDA
+
+Renaming columns:
+
+I want to rename the columns before EDA as spaces between column names makes it difficult while coding.Additionally, one can rename the columns to descriptive names as they provide clear understanding of variables and makes it easier to explore the data.
+
+```{r}
+#first let us check the column names
+names(student_performance_data)
+```
+If you observe in the above output the column names contain spaces , let's remove that spaces and rename some column names in more descriptive way
+
+```{r}
+student_performance_data <- student_performance_data %>%
+  rename_all(~sub("\\s+", "_", .))
+names(student_performance_data)[c(3,5)] <- c("Participation_in_Extracurricular_Activities","No_Of_Sample_Question_Papers_Practiced")
+names(student_performance_data)
+```
+
+Data Dictionary
+
+```{r}
+#viewing first few rows
+head(student_performance_data)
+```
+1. Hours_Studied - The amount of time the student studied
+2. Previous_Scores - Scores from the previous assessments
+3. Participation_in_Extracurricular_Activities - Participation of students in extra curricular activities
+4. Sleep_Hours - The number of hours devoted to sleep
+5. No_Of_Sample_Question_Papers_Practiced - Number of sample question papers practiced 
+6. Performance_Index - The ultimate measure of student's academic performance, It ranges from 10 to 100. The higher the performance, the better the performance
+
+## Exploratory Data Analysis
+
+```{r}
+str(student_performance_data)
+```
+
+```{r}
+summary(student_performance_data)
+```
+
+
+Creating pairwise scatterplot for numeric columns
+```{r}
+Student_Performance_Data_numeric <- subset(student_performance_data, select = -Participation_in_Extracurricular_Activities)
+pairs(Student_Performance_Data_numeric)
+```
+
+Detailed summary of numerical variables which also includes the number of missing values
+```{r}
+if (!requireNamespace("skimr", quietly = TRUE)) {
+  install.packages("skimr")
+}
+library(skimr)
+skim(student_performance_data)
+```
+Calculating missing values of one variable:
+```{r}
+sum(is.na(student_performance_data$Participation_in_Extracurricular_Activities))
+```
+There are no missing values in the dataset, so no need of handling missing values.
+```{r}
+student_performance_data$Participation_in_Extracurricular_Activities <- as.factor(student_performance_data$Participation_in_Extracurricular_Activities)
+head(student_performance_data)
+str(student_performance_data)
+```
+
+### Data Visualization:
+
+Box plots for numerical columns:
+```{r}
+library(ggplot2)
+numerical_columns <- student_performance_data %>%
+  select_if(is.numeric) %>% names()
+for (var in numerical_columns) {
+  boxplot(student_performance_data[[var]], main = var, col = "orange", border = "black", horizontal = TRUE)
+}
+```
+Looking at the Box plots of numerical columns we can say that there are no outliers in the dataset.
+
+
+Visualization of categorical variable : Participation_in_Extracurricular_Activities
+```{r}
+ggplot(student_performance_data, aes(x = factor(Participation_in_Extracurricular_Activities), fill = factor(Participation_in_Extracurricular_Activities))) +
+  geom_bar() +
+  labs(title = "Distribution of Extracurricular Activities")
+```
+## Correlation matrix
+
+
+```{r}
+if (!requireNamespace("corrplot", quietly = TRUE)) {
+  install.packages("corrplot")
+}
+library(corrplot)
+correlation_matrix <- cor(student_performance_data[numerical_columns])
+color_palette <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+corrplot(
+  correlation_matrix,
+  method = "circle",           # Use a circular layout
+  type = "upper",              # Show upper part of the matrix
+  order = "hclust",            # Order variables by hierarchical clustering
+  tl.cex = 0.7,                # Text label size
+  tl.col = "black",            # Text label color
+  col = color_palette(200),       # Color palette
+  addCoef.col = "black",       # Coefficient label color
+  number.cex = 0.7,            # Coefficient label size
+  diag = FALSE,                # Exclude diagonal elements
+  mar = c(0, 0, 1, 0),          # Set margins (bottom margin for row names)
+  title = "Correlation Matrix", # Add a title
+  tl.srt = 45,                 # Rotate text labels
+  addrect = 3                  # Highlight correlation coefficients with rectangles
+)
+```
+## Visualization of highly correlated variables with performance index
+```{r}
+set.seed(3008)
+random_sample <- student_performance_data %>% sample_n(1000)
+ggplot(random_sample, aes(x = Previous_Scores, y = Performance_Index)) +
+ geom_point() +
+labs( x = "Previous_Scores", y = "Performance_Index")
+```
+
+```{r}
+set.seed(3008)
+random_sample <- student_performance_data %>% sample_n(1000)
+ggplot(student_performance_data, aes(x = Previous_Scores, y = Performance_Index, color = Participation_in_Extracurricular_Activities)) +
+  geom_point() +
+  labs(x = "Hours_Studied", y = "Performance_Index", color = "Participation_in_Extracurricular_Activities") 
+```
+
+## Feature Selection
+```{r}
+#'Performance Index' is the column of interest for us
+correlation_matrix <- cor(student_performance_data[numerical_columns])
+performance_correlations <- correlation_matrix["Performance_Index", ]
+print(sort(abs(performance_correlations),decreasing = TRUE))
+```
+
+Converting the categorical column into numerical and finding out the correlation .
+```{r}
+
+library(dplyr)
+
+# Convert 'Yes' to 1 and 'No' to 0
+student_performance_data <- student_performance_data %>%
+  mutate(Participation_in_Extracurricular_Activities = as.numeric(Participation_in_Extracurricular_Activities == 'Yes'))
+
+print(student_performance_data$Participation_in_Extracurricular_Activities)
+```
+
+```{r}
+correlation_matrix <- cor(student_performance_data)
+performance_correlations <- correlation_matrix["Performance_Index", ]
+print(sort(abs(performance_correlations),decreasing = TRUE))
+```
+Considering the top three highly correlated variables as my predictors for performance Index.
+
+## Variables 
+
+Target variable : Performance_Index
+
+Independent Variables : Previous_Scores, Hours_Studied, Sleep_Hours
+
+
+## Model selection : Linear Regression
+Before training the model , splitting the data into train and test data randomly
+```{r}
+set.seed(2901)
+# shuffle the index for the testing data
+test_indices<-sample(nrow(student_performance_data), 0.25*nrow(student_performance_data))
+# Get the training data
+trainingData<-student_performance_data[-test_indices,]
+# Get the testing data
+testingData<-student_performance_data[test_indices,]
+
+```
+
+
+```{r}
+linear_model <- lm(Performance_Index ~ Previous_Scores + Hours_Studied + Sleep_Hours, data = trainingData)
+summary(linear_model)
+```
+
+## Prediction
+
+```{r}
+predictions <- predict(linear_model, newdata = testingData)
+
+# Calculating the accuracy of the model
+MSE <- mean((testingData$Performance_Index - predictions)^2)
+SSE <- sum((testingData$Performance_Index - predictions)^2)
+
+# Accuracy of the model
+cat("Mean Squared Error (MSE):", MSE, "\n")
+cat("Sum of Squared Errors (SSE):",SSE)
+
+# Plot the actual vs predicted values
+plot(testingData$Performance_Index, predictions, 
+     main = "Actual vs Predicted",
+     xlab = "Actual Performance Index",
+     ylab = "Predicted Performance Index")
+
+# Add a line indicating a perfect prediction (y = x)
+abline(0, 1, col = "red", lty = 2)
+
+# Add legend
+legend("topright", legend = c("Predictions", "Perfect Prediction"),
+       col = c("green", "red"), lty = c(1, 2))
+```
+```{r}
+cooks_distance<-cooks.distance(linear_model)
+plot(cooks_distance,type="h", ylab="Cook's Distance" )
+as.numeric(names(cooks_distance)[cooks_distance>1])
+
+```
+Based on our defined threshold of 1, the output is an empty numeric vector (numeric(0)), indicating that there are no observations in our dataset with a high Cook's Distance.
+Based on the threshold we selected, this result could be interpreted as meaning that your linear regression model is not significantly affected by any extreme outliers or influential points.
+
+
+
+## Assumption Validation
+```{r}
+par(mfrow=c(2,2))
+plot(linear_model)
+par(mfrow=c(1,1))
+hist(resid(linear_model),main="Histogram of Residuals")
+
+```
+
+
+
+
+## Results and conclusion
+
+The linear regression model is given by : Performance_Index = -32.93 + 1.02 * Previous_Scores + 2.85 * Hours_Studied + 0.47 * Sleep_Hours
+
+The Performance_Index appears to be well-predicted by the linear regression model using the provided predictors (Previous_Scores, Hours_Studied, Sleep_Hours).
+
+The model has a low prediction error (low MSE) and a high explanatory power (high R square).
+
+With an R-Square value of 0.9876, the dependent variable's variance is roughly 98.76% explained by the model. This points to a very high goodness of fit.
+
+The signs of the predictors' coefficients make sense, and they are statistically significant.
+
+The average squared difference between the expected and actual values is 4.43, which is represented by the Mean Squared Error (MSE). Greater predictive accuracy is indicated by lower MSE values.
+
+
+## References
+
+Used ChatGPT for plotting correlation matrix and actual vs predicted data
+Used Professor Yixun Xing Rmd file for assumptions and splitting data
+
+## THANK YOU
